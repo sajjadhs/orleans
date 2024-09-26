@@ -1,6 +1,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Orleans.Runtime;
 
@@ -10,15 +11,21 @@ namespace Orleans.Providers
     /// Memory stream queue grain. This grain works as a storage queue of event data. Enqueue and Dequeue operations are supported.
     /// the max event count sets the max storage limit to the queue.
     /// </summary>
+    [KeepAlive]
     public class MemoryStreamQueueGrain : Grain, IMemoryStreamQueueGrain, IGrainMigrationParticipant
     {
         private Queue<MemoryMessageData> _eventQueue = new Queue<MemoryMessageData>();
-        private long sequenceNumber = DateTime.UtcNow.Ticks;
+        private long sequenceNumber;
 
         /// <summary>
         /// The maximum event count. 
         /// </summary>
         private const int MaxEventCount = 16384;
+
+        public MemoryStreamQueueGrain()
+        {
+            sequenceNumber = DateTime.UtcNow.Ticks;
+        }
 
         /// <summary>
         /// Enqueues an event data. If the current total count reaches the max limit. throws an exception.
@@ -56,6 +63,7 @@ namespace Orleans.Providers
         void IGrainMigrationParticipant.OnDehydrate(IDehydrationContext dehydrationContext)
         {
             dehydrationContext.TryAddValue("queue", _eventQueue);
+            dehydrationContext.TryAddValue("sequenceNumber", sequenceNumber);
         }
 
         void IGrainMigrationParticipant.OnRehydrate(IRehydrationContext rehydrationContext)
@@ -63,6 +71,10 @@ namespace Orleans.Providers
             if (rehydrationContext.TryGetValue("queue", out Queue<MemoryMessageData> value))
             {
                 _eventQueue = value;
+            }
+            if (rehydrationContext.TryGetValue("sequenceNumber", out long seqValue))
+            {
+                sequenceNumber = seqValue;
             }
         }
     }
